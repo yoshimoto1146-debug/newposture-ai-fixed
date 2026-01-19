@@ -35,12 +35,13 @@ export const analyzePosture = async (
   
   const systemInstruction = `あなたは世界最高峰の理学療法士です。
 提供されたBefore/After画像を分析し、姿勢の変化を詳細に評価してください。
+画像が1つの視点のみの場合、その視点に基づいて最善の分析を行ってください。
 座標系は 0-1000 です。
 
 出力JSON仕様:
 - landmark: 指定された各関節の座標。
 - status: 'improved', 'same', 'needs-attention'。
-必ず有効なJSONのみを返してください。`;
+必ず有効なJSONのみを返してください。解説テキストは含めないでください。`;
 
   const pointSchema = {
     type: Type.OBJECT,
@@ -70,7 +71,7 @@ export const analyzePosture = async (
   };
 
   const parts = [
-    { text: `視点1: ${viewA.type}${viewB ? `, 視点2: ${viewB.type}` : ''} の分析。` },
+    { text: `分析開始。視点1: ${viewA.type}${viewB ? `, 視点2: ${viewB.type}` : ''}` },
     { inlineData: { data: viewA.before.split(',')[1], mimeType: 'image/jpeg' } },
     { inlineData: { data: viewA.after.split(',')[1], mimeType: 'image/jpeg' } }
   ];
@@ -116,6 +117,9 @@ export const analyzePosture = async (
     if (!text) throw new Error('AIレスポンスが空です');
     return JSON.parse(text);
   } catch (e: any) {
+    if (e.message?.includes('429')) {
+      throw new Error('APIの利用制限に達しました。1分ほど待ってから再度お試しください。');
+    }
     throw new Error(`分析エラー: ${e.message}`);
   }
 };
