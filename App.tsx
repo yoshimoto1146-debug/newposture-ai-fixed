@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { PhotoUploader } from './components/PhotoUploader';
 import { ImageAdjustment } from './components/ImageAdjustment';
-import { AnalysisView } from './AnalysisView';
+import { AnalysisView } from './components/AnalysisView';
 import { ViewType, PhotoData, AnalysisResults } from './types';
 import { analyzePosture, fileToBase64, resizeImage } from './services/gemini';
 import { ChevronLeft, Sparkles, Activity, User, ArrowRight } from 'lucide-react';
