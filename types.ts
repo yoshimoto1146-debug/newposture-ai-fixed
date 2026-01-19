@@ -18,8 +18,8 @@ export interface PostureLandmarks {
 
 export interface PosturePoint {
   label: string;
-  beforeScore: number; // 0-100
-  afterScore: number;  // 0-100
+  beforeScore: number; 
+  afterScore: number;  
   description: string;
   status: 'improved' | 'same' | 'needs-attention';
 }
@@ -34,7 +34,7 @@ export interface AnalysisResults {
     type: ViewType;
     beforeLandmarks: PostureLandmarks;
     afterLandmarks: PostureLandmarks;
-  };
+  } | null;
   overallBeforeScore: number;
   overallAfterScore: number;
   detailedScores: {
