@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { CheckCircle2, Activity, ArrowLeft, Info, Sparkles } from 'lucide-react';
+import { CheckCircle2, Activity, ArrowLeft, Info, Sparkles, ChevronLeft, ChevronRight } from 'lucide-react';
 import { AnalysisResults, PhotoData, PostureLandmarks, Point2D, PosturePoint } from '../types';
 
 const LandmarkLayer: React.FC<{ landmarks: PostureLandmarks; color: string; photo: PhotoData }> = ({ landmarks, color, photo }) => {
@@ -42,11 +42,12 @@ export const AnalysisView: React.FC<{ results: AnalysisResults; photos: Record<s
   const [activeView, setActiveView] = useState<'viewA' | 'viewB'>('viewA');
   const [sliderPos, setSliderPos] = useState(50);
 
+  // viewBが存在しない場合、自動的にviewAにリセット
   useEffect(() => {
     if (!results.viewB && activeView === 'viewB') {
       setActiveView('viewA');
     }
-  }, [results, activeView]);
+  }, [results.viewB, activeView]);
 
   const viewData = activeView === 'viewA' ? results.viewA : results.viewB;
   const photoKey = activeView === 'viewA' ? 'v1' : 'v2';
@@ -54,26 +55,27 @@ export const AnalysisView: React.FC<{ results: AnalysisResults; photos: Record<s
   const photoBefore = photos[`${photoKey}-before`];
   const photoAfter = photos[`${photoKey}-after`];
 
+  // ガード: 写真が見つからない場合はエラー画面
   if (!viewData || !photoBefore?.url || !photoAfter?.url) {
     return (
       <div className="flex flex-col items-center justify-center p-12 bg-white rounded-[3rem] shadow-xl text-center space-y-6">
         <Info className="w-16 h-16 text-blue-500" />
         <h2 className="text-2xl font-black text-slate-900">表示できるデータがありません</h2>
-        <p className="text-slate-500">解析中に問題が発生した可能性があります。</p>
-        <button onClick={onReset} className="px-8 py-4 bg-blue-600 text-white rounded-2xl font-bold flex items-center gap-2">
-          <ArrowLeft className="w-5 h-5" /> 最初に戻る
+        <p className="text-slate-500 font-bold">1視点のみアップロードした場合、設定が正しく行われているか確認してください。</p>
+        <button onClick={onReset} className="px-10 py-5 bg-blue-600 text-white rounded-2xl font-black flex items-center gap-2 shadow-lg">
+          <ArrowLeft className="w-5 h-5" /> 最初からやり直す
         </button>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500 max-w-6xl mx-auto w-full pb-12">
+    <div className="space-y-6 animate-in fade-in duration-500 max-w-6xl mx-auto w-full pb-16">
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-        {/* 画像比較エリア */}
+        {/* 画像比較エリア (スプリット・スライダー) */}
         <div className="lg:col-span-7 space-y-4">
           {results.viewB && (
-            <div className="flex bg-white p-1 rounded-2xl border shadow-sm">
+            <div className="flex bg-white p-1 rounded-2xl border shadow-sm mb-4">
               <button onClick={() => setActiveView('viewA')} className={`flex-1 py-3 rounded-xl font-black text-xs transition-all ${activeView === 'viewA' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-50'}`}>
                 視点 1: {results.viewA.type.toUpperCase()}
               </button>
@@ -83,7 +85,8 @@ export const AnalysisView: React.FC<{ results: AnalysisResults; photos: Record<s
             </div>
           )}
           
-          <div className="relative aspect-[3/4] bg-slate-950 rounded-[2.5rem] overflow-hidden shadow-2xl border-4 border-white group">
+          <div className="relative aspect-[3/4] bg-slate-950 rounded-[2.5rem] overflow-hidden shadow-2xl border-4 border-white group touch-none select-none">
+            {/* Before (下層・右側) */}
             <div className="absolute inset-0">
               <img 
                 src={photoBefore.url} 
@@ -91,9 +94,10 @@ export const AnalysisView: React.FC<{ results: AnalysisResults; photos: Record<s
                 style={{ transform: `scale(${photoBefore.scale}) translate(${photoBefore.offset.x}px, ${photoBefore.offset.y}px) scaleX(${photoBefore.isFlipped ? -1 : 1})`, transformOrigin: 'center center' }} 
               />
               <LandmarkLayer landmarks={viewData.beforeLandmarks} color="#94a3b8" photo={photoBefore} />
-              <div className="absolute top-6 left-6 px-4 py-2 bg-slate-800/80 backdrop-blur-md rounded-full text-[10px] font-black text-white tracking-widest border border-white/10 uppercase">Before</div>
+              <div className="absolute top-6 right-6 px-4 py-2 bg-slate-800/80 backdrop-blur-md rounded-full text-[10px] font-black text-white tracking-widest border border-white/10 uppercase z-10">Before</div>
             </div>
             
+            {/* After (上層・左側 - スライダーで切り取り) */}
             <div className="absolute inset-0 z-20" style={{ clipPath: `inset(0 ${100 - sliderPos}% 0 0)` }}>
               <img 
                 src={photoAfter.url} 
@@ -101,56 +105,81 @@ export const AnalysisView: React.FC<{ results: AnalysisResults; photos: Record<s
                 style={{ transform: `scale(${photoAfter.scale}) translate(${photoAfter.offset.x}px, ${photoAfter.offset.y}px) scaleX(${photoAfter.isFlipped ? -1 : 1})`, transformOrigin: 'center center' }} 
               />
               <LandmarkLayer landmarks={viewData.afterLandmarks} color="#3b82f6" photo={photoAfter} />
-              <div className="absolute top-6 left-6 px-4 py-2 bg-blue-600 rounded-full text-[10px] font-black text-white tracking-widest shadow-lg uppercase">After</div>
+              <div className="absolute top-6 left-6 px-4 py-2 bg-blue-600 rounded-full text-[10px] font-black text-white tracking-widest shadow-lg uppercase z-30">After</div>
             </div>
             
+            {/* 仕切り線 & ハンドル */}
+            <div 
+              className="absolute top-0 bottom-0 z-50 w-1 bg-white cursor-ew-resize flex items-center justify-center pointer-events-none shadow-[0_0_15px_rgba(255,255,255,0.5)]"
+              style={{ left: `${sliderPos}%` }}
+            >
+              <div className="w-10 h-10 bg-white rounded-full shadow-2xl flex items-center justify-center border-4 border-blue-600 pointer-events-auto transition-transform active:scale-125">
+                <div className="flex gap-1">
+                  <ChevronLeft className="w-3.5 h-3.5 text-blue-600" />
+                  <ChevronRight className="w-3.5 h-3.5 text-blue-600" />
+                </div>
+              </div>
+            </div>
+
+            {/* 透明なレンジ入力 */}
             <input 
               type="range" 
-              className="absolute bottom-10 left-10 right-10 z-50 accent-blue-600 h-1.5 bg-white/20 rounded-full appearance-none cursor-pointer" 
+              className="absolute inset-0 z-[60] w-full h-full opacity-0 cursor-ew-resize" 
+              min="0" 
+              max="100"
               value={sliderPos} 
               onChange={e => setSliderPos(Number(e.target.value))} 
             />
           </div>
+          <p className="text-center text-[10px] font-black text-slate-400 uppercase tracking-widest mt-4">画像中央を左右にスワイプして変化を確認</p>
         </div>
 
-        {/* 評価・アドバイスエリア */}
-        <div className="lg:col-span-5 space-y-4 flex flex-col">
+        {/* 評価エリア */}
+        <div className="lg:col-span-5 space-y-4 flex flex-col h-full">
+          {/* スコアカード */}
           <div className="bg-slate-900 rounded-[2.5rem] p-8 text-white shadow-2xl relative overflow-hidden shrink-0 border border-white/5">
-            <p className="text-[10px] font-black tracking-[0.2em] text-blue-400 uppercase mb-4">POSTURE ANALYSIS PRO</p>
-            <div className="flex justify-between items-end mb-6">
-              <div className="space-y-1">
-                <p className="text-[10px] font-bold text-slate-500 uppercase">総合スコア (After)</p>
-                <div className="flex items-baseline gap-2">
-                  <span className="text-7xl font-black tracking-tighter tabular-nums leading-none">{results.overallAfterScore}</span>
-                  <span className="text-xl font-bold text-blue-500">/100</span>
+            <div className="relative z-10">
+              <p className="text-[10px] font-black tracking-[0.2em] text-blue-400 uppercase mb-4 flex items-center gap-2">
+                <Activity className="w-3 h-3" /> Posture Analysis Pro
+              </p>
+              <div className="flex justify-between items-end mb-6">
+                <div className="space-y-1">
+                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">総合改善スコア</p>
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-7xl font-black tracking-tighter tabular-nums leading-none">{results.overallAfterScore}</span>
+                    <span className="text-xl font-bold text-blue-500">/100</span>
+                  </div>
                 </div>
               </div>
+              <div className="bg-white/5 p-5 rounded-[1.5rem] border border-white/10">
+                <p className="text-[11px] font-medium leading-relaxed text-blue-50/90">{results.summary}</p>
+              </div>
             </div>
-            <div className="bg-white/5 p-4 rounded-2xl border border-white/10">
-              <p className="text-xs font-medium leading-relaxed text-blue-50/80">{results.summary}</p>
-            </div>
+            {/* 背景の装飾 */}
+            <div className="absolute -right-10 -bottom-10 w-40 h-40 bg-blue-600/10 rounded-full blur-3xl"></div>
           </div>
 
+          {/* 項目別アドバイス */}
           <div className="flex-grow space-y-3 overflow-y-auto pr-2 custom-scrollbar">
             {Object.entries(results.detailedScores).map(([key, item]) => (
-              <div key={key} className="bg-white p-5 rounded-[2rem] border border-slate-100 shadow-sm transition-all hover:border-blue-200 group">
+              <div key={key} className="bg-white p-5 rounded-[2.2rem] border border-slate-100 shadow-sm transition-all hover:border-blue-200 group">
                 <div className="flex items-center gap-4 mb-3">
-                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${item.status === 'improved' ? 'bg-green-50 text-green-500' : 'bg-blue-50 text-blue-500'}`}>
+                  <div className={`w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 ${item.status === 'improved' ? 'bg-green-50 text-green-500' : 'bg-blue-50 text-blue-500'}`}>
                     {item.status === 'improved' ? <CheckCircle2 className="w-5 h-5" /> : <Activity className="w-5 h-5" />}
                   </div>
                   <div className="flex-grow">
                     <div className="flex justify-between items-center">
-                      <span className="font-black text-xs text-slate-700 uppercase">{item.label}</span>
-                      <span className="text-sm font-black text-blue-600">{item.score}<span className="text-[10px] ml-0.5">pts</span></span>
+                      <span className="font-black text-[11px] text-slate-700 uppercase tracking-tighter">{item.label}</span>
+                      <span className="text-sm font-black text-blue-600 tabular-nums">{item.score}<span className="text-[10px] ml-0.5">pts</span></span>
                     </div>
-                    <div className="w-full bg-slate-50 h-1.5 rounded-full overflow-hidden mt-1">
-                      <div className="bg-blue-600 h-full transition-all duration-1000" style={{ width: `${item.score}%` }}></div>
+                    <div className="w-full bg-slate-50 h-2 rounded-full overflow-hidden mt-1.5 shadow-inner">
+                      <div className="bg-blue-600 h-full transition-all duration-1000 ease-out" style={{ width: `${item.score}%` }}></div>
                     </div>
                   </div>
                 </div>
-                {/* 改善アドバイスの表示を追加 */}
-                <div className="mt-2 pl-14 relative">
-                  <div className="absolute left-[52px] top-1 bottom-1 w-[2px] bg-blue-100 rounded-full"></div>
+                {/* 理学療法士の一言アドバイス */}
+                <div className="mt-2 pl-[58px] relative">
+                  <div className="absolute left-[54px] top-1 bottom-1 w-[3px] bg-blue-50 rounded-full"></div>
                   <div className="flex items-start gap-2">
                     <Sparkles className="w-3 h-3 text-blue-400 shrink-0 mt-0.5" />
                     <p className="text-[11px] font-bold text-slate-500 leading-relaxed italic">
@@ -162,8 +191,9 @@ export const AnalysisView: React.FC<{ results: AnalysisResults; photos: Record<s
             ))}
           </div>
 
-          <button onClick={onReset} className="w-full py-5 bg-slate-900 text-white rounded-[2rem] font-black text-sm tracking-widest uppercase hover:bg-blue-600 transition-all shadow-xl flex items-center justify-center gap-2 mt-2">
-            <ArrowLeft className="w-4 h-4" /> 新しい分析を開始
+          {/* リセットボタン */}
+          <button onClick={onReset} className="w-full py-5.5 bg-slate-900 text-white rounded-[2rem] font-black text-xs tracking-widest uppercase hover:bg-blue-600 transition-all shadow-xl flex items-center justify-center gap-2 mt-2 group">
+            <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" /> 最初に戻って新しく分析
           </button>
         </div>
       </div>
