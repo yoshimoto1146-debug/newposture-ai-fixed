@@ -18,7 +18,8 @@ export interface PostureLandmarks {
 
 export interface PosturePoint {
   label: string;
-  score: number; // 0-100
+  beforeScore: number; // 0-100
+  afterScore: number;  // 0-100
   description: string;
   status: 'improved' | 'same' | 'needs-attention';
 }
