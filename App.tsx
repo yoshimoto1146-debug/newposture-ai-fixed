@@ -96,7 +96,8 @@ const App: React.FC = () => {
               {selectedViews.map((view, i) => (
                 <div key={view} className="space-y-6">
                   <h3 className="font-black text-slate-900 uppercase tracking-widest text-center">{viewLabels[view]}分析</h3>
-                  <div className="grid grid-cols-2 gap-4">
+                  {/* スマホで縦並びにするため grid-cols-1 sm:grid-cols-2 に変更 */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
                     <PhotoUploader label="Before" imageUrl={photos[`v${i+1}-before`].url} onUpload={(f) => handleUpload(`v${i+1}-before`, f)} />
                     <PhotoUploader label="After" imageUrl={photos[`v${i+1}-after`].url} onUpload={(f) => handleUpload(`v${i+1}-after`, f)} />
                   </div>
@@ -113,15 +114,24 @@ const App: React.FC = () => {
           <div className="space-y-6 flex flex-col h-full animate-in fade-in duration-500">
              <button onClick={() => setStep('upload')} className="text-slate-400 font-black text-xs flex items-center gap-2 tracking-widest uppercase mb-4"><ChevronLeft className="w-4 h-4" /> 画像選択に戻る</button>
              
-             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+             {/* スマホで縦並びにするため grid-cols-1 を基本にし md以上でグリッド化 */}
+             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-12">
                {selectedViews.flatMap((view, i) => [
                  <div key={`align-v${i+1}-before`} className="space-y-3">
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">{viewLabels[view]} : Before</p>
-                    <ImageAdjustment photo={photos[`v${i+1}-before`]} onUpdate={(p) => setPhotos(prev => ({...prev, [`v${i+1}-before`]: p}))} />
+                    <div className="flex flex-col items-center">
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">{viewLabels[view]} : Before</p>
+                      <div className="w-full mt-2">
+                        <ImageAdjustment photo={photos[`v${i+1}-before`]} onUpdate={(p) => setPhotos(prev => ({...prev, [`v${i+1}-before`]: p}))} />
+                      </div>
+                    </div>
                  </div>,
                  <div key={`align-v${i+1}-after`} className="space-y-3">
-                    <p className="text-[10px] font-black text-blue-500 uppercase tracking-widest text-center">{viewLabels[view]} : After (透過Before重畳中)</p>
-                    <ImageAdjustment photo={photos[`v${i+1}-after`]} onUpdate={(p) => setPhotos(prev => ({...prev, [`v${i+1}-after`]: p}))} referencePhoto={photos[`v${i+1}-before`]} />
+                    <div className="flex flex-col items-center">
+                      <p className="text-[10px] font-black text-blue-500 uppercase tracking-widest text-center">{viewLabels[view]} : After (Before重畳中)</p>
+                      <div className="w-full mt-2">
+                        <ImageAdjustment photo={photos[`v${i+1}-after`]} onUpdate={(p) => setPhotos(prev => ({...prev, [`v${i+1}-after`]: p}))} referencePhoto={photos[`v${i+1}-before`]} />
+                      </div>
+                    </div>
                  </div>
                ])}
              </div>
