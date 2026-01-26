@@ -1,6 +1,6 @@
 
-import React, { useState, useEffect, useMemo } from 'react';
-import { CheckCircle2, Activity, ArrowLeft, Info, Sparkles, ChevronLeft, ChevronRight, TrendingUp, ArrowUpRight, Share2, Printer } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
+import { CheckCircle2, Activity, ArrowLeft, Info, Sparkles, ChevronLeft, ChevronRight, TrendingUp, ArrowUpRight, Share2 } from 'lucide-react';
 import { AnalysisResults, PhotoData, PostureLandmarks, Point2D, PosturePoint } from '../types';
 
 const LandmarkLayer: React.FC<{ 
@@ -13,14 +13,11 @@ const LandmarkLayer: React.FC<{
   if (!landmarks || !landmarks.head) return null;
   const toPct = (val: number) => val / 10;
   
-  // 全身をつなぐスケルトンラインを生成
   const generateBodyPath = () => {
-    // 定義された順序で点をつなぐ
     const mainPoints = [
       landmarks.head,
       landmarks.ear,
       landmarks.shoulder,
-      // 背骨のパスを途中に挿入
       ...(landmarks.spinePath || []),
       landmarks.hip,
       landmarks.knee,
@@ -41,14 +38,11 @@ const LandmarkLayer: React.FC<{
   return (
     <div className="absolute inset-0 pointer-events-none z-40" style={style}>
       <svg className="w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
-        {/* 垂直基準線（重心・アライメント確認用） */}
         <line 
           x1={toPct(landmarks.head.x)} y1={toPct(landmarks.head.y)} 
           x2={toPct(landmarks.head.x)} y2={toPct(landmarks.heel.y)} 
           stroke={color} strokeWidth="0.15" strokeDasharray="1,2" strokeOpacity="0.3" 
         />
-        
-        {/* 全身をつなぐ姿勢ライン */}
         <path 
           d={generateBodyPath()} 
           fill="none" 
@@ -60,8 +54,6 @@ const LandmarkLayer: React.FC<{
           className="drop-shadow-[0_0_3px_rgba(255,255,255,0.5)]"
         />
       </svg>
-      
-      {/* 主要な関節の点（ノード） */}
       {Object.entries(landmarks).map(([key, point]) => {
         if (key === 'spinePath' || !point || Array.isArray(point)) return null;
         const p = point as Point2D;
@@ -80,24 +72,12 @@ const LandmarkLayer: React.FC<{
 };
 
 export const AnalysisView: React.FC<{ results: AnalysisResults; photos: Record<string, PhotoData>; onReset: () => void }> = ({ results, photos, onReset }) => {
-  const [activeView, setActiveView] = useState<'viewA' | 'viewB'>('viewA');
   const [sliderPos, setSliderPos] = useState(50);
 
-  useEffect(() => {
-    if (!results.viewB && activeView === 'viewB') {
-      setActiveView('viewA');
-    }
-  }, [results.viewB, activeView]);
+  const viewData = results.viewA;
+  const photoBefore = photos[`v1-before`];
+  const photoAfter = photos[`v1-after`];
 
-  const viewData = useMemo(() => {
-    return activeView === 'viewA' ? results.viewA : results.viewB;
-  }, [activeView, results]);
-
-  const photoKey = activeView === 'viewA' ? 'v1' : 'v2';
-  const photoBefore = photos[`${photoKey}-before`];
-  const photoAfter = photos[`${photoKey}-after`];
-
-  // レポートを共有・保存する機能
   const handleShare = async () => {
     if (navigator.share) {
       try {
@@ -133,7 +113,6 @@ export const AnalysisView: React.FC<{ results: AnalysisResults; photos: Record<s
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500 max-w-6xl mx-auto w-full pb-20 px-2 md:px-0 print:p-0">
-      {/* 共有アクションバー */}
       <div className="flex justify-between items-center bg-white p-4 rounded-3xl shadow-sm border border-slate-100 print:hidden">
         <button onClick={onReset} className="flex items-center gap-2 text-slate-400 font-black text-xs uppercase tracking-widest px-4 py-2 hover:bg-slate-50 rounded-xl transition-all">
           <ArrowLeft className="w-4 h-4" /> 戻る
@@ -146,32 +125,33 @@ export const AnalysisView: React.FC<{ results: AnalysisResults; photos: Record<s
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-        {/* ビジュアル比較エリア */}
         <div className="lg:col-span-7 space-y-6 print:break-after-page">
-          {results.viewB && (
-            <div className="flex bg-white p-1 rounded-[1.5rem] border shadow-sm ring-4 ring-slate-50 print:hidden">
-              <button onClick={() => setActiveView('viewA')} className={`flex-1 py-3.5 rounded-xl font-black text-xs transition-all ${activeView === 'viewA' ? 'bg-blue-600 text-white shadow-xl' : 'text-slate-400 hover:bg-slate-50'}`}>
-                視点 1: {results.viewA.type.toUpperCase()}
-              </button>
-              <button onClick={() => setActiveView('viewB')} className={`flex-1 py-3.5 rounded-xl font-black text-xs transition-all ${activeView === 'viewB' ? 'bg-blue-600 text-white shadow-xl' : 'text-slate-400 hover:bg-slate-50'}`}>
-                視点 2: {results.viewB.type.toUpperCase()}
-              </button>
-            </div>
-          )}
-          
           <div className="relative aspect-[3/4] bg-slate-950 rounded-[3rem] overflow-hidden shadow-2xl border-4 border-white group touch-none select-none">
             <div className="absolute inset-0 z-10">
-              <img src={photoBefore.url} className="w-full h-full object-contain opacity-40 grayscale" style={{ transform: `scale(${photoBefore.scale}) translate(${photoBefore.offset.x}px, ${photoBefore.offset.y}px) scaleX(${photoBefore.isFlipped ? -1 : 1})`, transformOrigin: 'center center' }} />
-              <LandmarkLayer landmarks={viewData.beforeLandmarks} color="#94a3b8" photo={photoBefore} />
+              <img 
+                src={photoBefore.url} 
+                className="w-full h-full object-contain" 
+                style={{ 
+                  transform: `scale(${photoBefore.scale}) translate(${photoBefore.offset.x}px, ${photoBefore.offset.y}px) scaleX(${photoBefore.isFlipped ? -1 : 1})`, 
+                  transformOrigin: 'center center' 
+                }} 
+              />
+              <LandmarkLayer landmarks={viewData.beforeLandmarks} color="#64748b" photo={photoBefore} />
             </div>
             
             <div className="absolute inset-0 z-20" style={{ clipPath: `inset(0 ${100 - sliderPos}% 0 0)` }}>
-              <img src={photoAfter.url} className="w-full h-full object-contain" style={{ transform: `scale(${photoAfter.scale}) translate(${photoAfter.offset.x}px, ${photoAfter.offset.y}px) scaleX(${photoAfter.isFlipped ? -1 : 1})`, transformOrigin: 'center center' }} />
-              <LandmarkLayer landmarks={viewData.beforeLandmarks} color="#ffffff" photo={photoAfter} opacity={0.3} isDashed={true} />
+              <img 
+                src={photoAfter.url} 
+                className="w-full h-full object-contain" 
+                style={{ 
+                  transform: `scale(${photoAfter.scale}) translate(${photoAfter.offset.x}px, ${photoAfter.offset.y}px) scaleX(${photoAfter.isFlipped ? -1 : 1})`, 
+                  transformOrigin: 'center center' 
+                }} 
+              />
+              <LandmarkLayer landmarks={viewData.beforeLandmarks} color="#64748b" photo={photoAfter} opacity={0.3} isDashed={true} />
               <LandmarkLayer landmarks={viewData.afterLandmarks} color="#3b82f6" photo={photoAfter} />
             </div>
             
-            {/* スライダーのつまみ（印刷時は非表示） */}
             <div className="absolute top-0 bottom-0 z-[60] w-1 bg-white/80 shadow-2xl flex items-center justify-center pointer-events-none print:hidden" style={{ left: `${sliderPos}%` }}>
               <div className="w-12 h-12 bg-white rounded-full shadow-2xl flex items-center justify-center border-4 border-blue-600 pointer-events-auto active:scale-110 transition-transform">
                 <ChevronLeft className="w-4 h-4 text-blue-600" /><ChevronRight className="w-4 h-4 text-blue-600" />
@@ -186,7 +166,6 @@ export const AnalysisView: React.FC<{ results: AnalysisResults; photos: Record<s
           </div>
         </div>
 
-        {/* スコア詳細エリア */}
         <div className="lg:col-span-5 flex flex-col gap-6">
           <div className="bg-slate-900 rounded-[2.5rem] p-8 text-white shadow-2xl relative overflow-hidden">
             <div className="absolute top-0 right-0 p-8 opacity-10">
@@ -234,18 +213,11 @@ export const AnalysisView: React.FC<{ results: AnalysisResults; photos: Record<s
                         </div>
                       </div>
                     </div>
-                    {diff > 0 && (
-                      <span className="text-[10px] font-black bg-green-50 text-green-600 px-2 py-1 rounded-full border border-green-100 shrink-0">
-                        +{diff}
-                      </span>
-                    )}
                   </div>
-
                   <div className="relative w-full h-3 bg-slate-100 rounded-full overflow-hidden shadow-inner">
                     <div className="absolute inset-0 bg-slate-300/30" style={{ width: `${item.beforeScore}%` }}></div>
                     <div className={`absolute inset-0 ${diff > 0 ? 'bg-green-500' : 'bg-blue-600'} h-full rounded-full transition-all duration-1000 ease-out`} style={{ width: `${item.afterScore}%` }}></div>
                   </div>
-
                   <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
                     <p className="text-[12px] font-bold text-slate-600 leading-relaxed italic">
                       <span className="text-blue-500 mr-2">アドバイス:</span>{item.description}
@@ -262,11 +234,9 @@ export const AnalysisView: React.FC<{ results: AnalysisResults; photos: Record<s
         </div>
       </div>
       
-      {/* 印刷用フッター */}
       <div className="hidden print:block text-center pt-10 text-slate-400 text-[10px] font-bold uppercase tracking-[0.2em]">
         Generated by PostureRefine AI Pro • AI-Powered Posture Analysis Report
       </div>
     </div>
   );
 };
-
