@@ -1,3 +1,4 @@
+
 export type ViewType = 'front' | 'back' | 'side' | 'extension' | 'flexion';
 
 export interface Point2D {
@@ -30,11 +31,6 @@ export interface AnalysisResults {
     beforeLandmarks: PostureLandmarks;
     afterLandmarks: PostureLandmarks;
   };
-  viewB?: {
-    type: ViewType;
-    beforeLandmarks: PostureLandmarks;
-    afterLandmarks: PostureLandmarks;
-  } | null;
   overallBeforeScore: number;
   overallAfterScore: number;
   detailedScores: {
