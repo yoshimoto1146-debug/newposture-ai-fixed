@@ -1,4 +1,5 @@
 
+
 export type ViewType = 'front' | 'back' | 'side' | 'extension' | 'flexion';
 
 export interface Point2D {
@@ -49,4 +50,20 @@ export interface PhotoData {
   scale: number;
   offset: { x: number; y: number };
   isFlipped: boolean;
+}
+
+/**
+ * Interface for the AI Studio key selection utility to match global ambient definitions.
+ */
+export interface AIStudio {
+  hasSelectedApiKey: () => Promise<boolean>;
+  openSelectKey: () => Promise<void>;
+}
+
+// ブラウザのwindowオブジェクトにaistudioを追加するための定義
+declare global {
+  interface Window {
+    // Fixed: Aligned property type with ambient AIStudio definition to fix mismatch error
+    aistudio?: AIStudio;
+  }
 }
