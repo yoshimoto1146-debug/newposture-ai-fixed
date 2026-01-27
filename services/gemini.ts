@@ -38,8 +38,14 @@ export const analyzePosture = async (
   const ai = new GoogleGenAI({ apiKey });
   
   const systemInstruction = `あなたは世界最高峰の理学療法士です。
-BeforeとAfterの画像を比較し、姿勢改善を詳細に数値化してください。
-spinePathは背中のラインに沿って正確に5点を抽出してください。`;
+ユーザーがアップロードした2枚の写真（Before/After）を比較分析してください。
+特に「背骨のライン（spinePath）」を最重要視します。
+
+【分析のガイドライン】
+1. spinePath: 頸椎下部から仙骨まで、背骨の隆起に沿って正確に7点を抽出してください。
+2. landmark: 0-1000の範囲で座標を指定。
+3. 比較: BeforeとAfterで同じ基準点を用い、改善が見られる箇所を具体的に言語化してください。
+4. 数値化: 各項目のbeforeScore/afterScoreは、理想的な姿勢を100点として算出してください。`;
 
   const pointSchema = {
     type: Type.OBJECT,
@@ -51,7 +57,7 @@ spinePathは背中のラインに沿って正確に5点を抽出してくださ�
     type: Type.OBJECT,
     properties: {
       head: pointSchema, ear: pointSchema, shoulder: pointSchema,
-      spinePath: { type: Type.ARRAY, items: pointSchema },
+      spinePath: { type: Type.ARRAY, items: pointSchema, description: "背骨の曲線を表す7つの点" },
       hip: pointSchema, knee: pointSchema, ankle: pointSchema, heel: pointSchema
     },
     required: ['head', 'ear', 'shoulder', 'spinePath', 'hip', 'knee', 'ankle', 'heel']
@@ -70,7 +76,7 @@ spinePathは背中のラインに沿って正確に5点を抽出してくださ�
   };
 
   const parts = [
-    { text: `分析視点: ${viewA.type}` },
+    { text: `分析視点: ${viewA.type}。背中のラインの変化に注目して詳細にスコアリングしてください。` },
     { inlineData: { data: viewA.before.split(',')[1], mimeType: 'image/jpeg' } },
     { inlineData: { data: viewA.after.split(',')[1], mimeType: 'image/jpeg' } }
   ];
