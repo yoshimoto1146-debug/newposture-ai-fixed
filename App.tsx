@@ -5,12 +5,12 @@ import { ImageAdjustment } from './components/ImageAdjustment';
 import { AnalysisView } from './components/AnalysisView';
 import { ViewType, PhotoData, AnalysisResults } from './types';
 import { analyzePosture, fileToBase64, resizeImage } from './services/gemini';
-import { ChevronLeft, Sparkles, Activity, User, ArrowRight, AlertCircle, RefreshCcw } from 'lucide-react';
+import { ChevronLeft, Sparkles, Activity, User, ArrowRight, AlertCircle, RefreshCcw, Key } from 'lucide-react';
 
 const App: React.FC = () => {
   const [step, setStep] = useState<'type-select' | 'upload' | 'align' | 'analyze'>('type-select');
   const [selectedView, setSelectedView] = useState<ViewType>('back');
-  const [error, setError] = useState<{title: string, message: string, canRetry?: boolean} | null>(null);
+  const [error, setError] = useState<{title: string, message: string, detail?: string, canRetry?: boolean, showKeyBtn?: boolean} | null>(null);
   
   const [photos, setPhotos] = useState<Record<string, PhotoData>>({
     'v1-before': { id: 'v1-before', url: '', scale: 1, offset: { x: 0, y: 0 }, isFlipped: false },
@@ -28,14 +28,22 @@ const App: React.FC = () => {
     setSelectedView(type);
   };
 
+  // Fix: Added missing function to verify both images are uploaded before alignment
+  const canProceedToAlign = () => {
+    return !!photos['v1-before'].url && !!photos['v1-after'].url;
+  };
+
   const handleUpload = async (key: string, file: File) => {
     const base64 = await fileToBase64(file);
     const resized = await resizeImage(base64);
     setPhotos(prev => ({ ...prev, [key]: { ...prev[key], url: resized } }));
   };
 
-  const canProceedToAlign = () => {
-    return !!(photos['v1-before']?.url && photos['v1-after']?.url);
+  const handleOpenKeySelector = async () => {
+    if (window.aistudio && typeof window.aistudio.openSelectKey === 'function') {
+      await window.aistudio.openSelectKey();
+      setError(null);
+    }
   };
 
   const startAnalysis = async (retryCount = 0) => {
@@ -49,31 +57,35 @@ const App: React.FC = () => {
       setResults(res);
     } catch (e: any) {
       console.error("Analysis Error:", e);
-      const msg = e.message?.toLowerCase() || '';
-      const isRpcError = msg.includes('rpc') || msg.includes('xhr') || msg.includes('proxyunarycall') || msg.includes('500');
-
-      if (isRpcError && retryCount < 1) {
-        console.warn("Temporary network/RPC error detected. Retrying...");
-        setTimeout(() => startAnalysis(retryCount + 1), 1500);
+      const msg = e.message || '';
+      const lowerMsg = msg.toLowerCase();
+      
+      // 通信エラー（500/RPC/XHR）の場合は最大2回までリトライ
+      const isRpcError = lowerMsg.includes('rpc') || lowerMsg.includes('xhr') || lowerMsg.includes('500') || lowerMsg.includes('failed to fetch');
+      
+      if (isRpcError && retryCount < 2) {
+        setTimeout(() => startAnalysis(retryCount + 1), 2000);
         return;
       }
 
-      if (msg.includes('429') || msg.includes('quota') || msg.includes('exhausted')) {
+      if (msg.includes('API_KEY_MISSING')) {
+        setError({
+          title: 'APIキーが未設定です',
+          message: '解析にはAPIキーの選択が必要です。右上の設定（または以下のボタン）からキーを選んでください。',
+          showKeyBtn: true
+        });
+      } else if (lowerMsg.includes('429') || lowerMsg.includes('quota')) {
         setError({
           title: '利用制限に達しました',
-          message: 'APIの利用制限、またはクォータ上限に達しました。時間をおいて再度お試しください。',
-        });
-      } else if (isRpcError) {
-        setError({
-          title: '一時的な通信エラー',
-          message: 'サーバーとの通信が中断されました。もう一度「再試行」を押してください。',
-          canRetry: true
+          message: '無料枠の上限に達したか、短時間にリクエストが集中しました。少し時間を置いてお試しください。',
         });
       } else {
         setError({
-          title: '解析エラー',
-          message: '通信エラーまたはサーバー側の問題が発生しました。インターネット接続を確認し、再度お試しください。',
-          canRetry: true
+          title: '解析エラーが発生しました',
+          message: '通信環境が不安定か、画像データが大きすぎる可能性があります。',
+          detail: msg.substring(0, 100),
+          canRetry: true,
+          showKeyBtn: true
         });
       }
     }
@@ -89,6 +101,9 @@ const App: React.FC = () => {
           </div>
           <h1 className="font-black text-slate-900 tracking-tight text-xl italic uppercase">PostureRefine Pro</h1>
         </div>
+        <button onClick={handleOpenKeySelector} className="p-3 text-slate-400 hover:text-blue-600 transition-colors">
+          <Key className="w-5 h-5" />
+        </button>
       </header>
 
       <main className="flex-grow flex flex-col max-w-6xl mx-auto w-full">
@@ -156,7 +171,7 @@ const App: React.FC = () => {
             <div className="my-auto flex flex-col items-center justify-center space-y-8">
               <div className="w-24 h-24 border-8 border-blue-50 border-t-blue-600 rounded-full animate-spin"></div>
               <h2 className="text-2xl font-black text-slate-900">AI 姿勢診断中...</h2>
-              <p className="text-slate-400 font-bold animate-pulse text-center">理学療法の専門知見に基づいて分析しています</p>
+              <p className="text-slate-400 font-bold animate-pulse text-center">通信量削減のため画像を最適化して送信しています</p>
             </div>
           ) : error ? (
             <div className="my-auto max-w-lg mx-auto w-full bg-white p-12 rounded-[3rem] shadow-2xl border border-red-50 text-center space-y-8">
@@ -166,11 +181,17 @@ const App: React.FC = () => {
               <div className="space-y-3">
                 <h2 className="text-2xl font-black text-slate-900">{error.title}</h2>
                 <p className="text-slate-500 font-bold leading-relaxed">{error.message}</p>
+                {error.detail && <p className="text-[10px] text-slate-300 font-mono mt-2">{error.detail}</p>}
               </div>
               <div className="flex flex-col gap-3">
+                {error.showKeyBtn && (
+                  <button onClick={handleOpenKeySelector} className="w-full py-5 bg-blue-600 text-white rounded-2xl font-black flex items-center justify-center gap-2 shadow-lg active:scale-95 transition-transform">
+                    <Key className="w-5 h-5" /> APIキーを再選択する
+                  </button>
+                )}
                 {error.canRetry && (
-                  <button onClick={() => startAnalysis(0)} className="w-full py-5 bg-blue-600 text-white rounded-2xl font-black flex items-center justify-center gap-2 shadow-lg active:scale-95 transition-transform">
-                    <RefreshCcw className="w-5 h-5" /> 再試行する
+                  <button onClick={() => startAnalysis(0)} className="w-full py-5 bg-slate-900 text-white rounded-2xl font-black flex items-center justify-center gap-2 shadow-lg active:scale-95 transition-transform">
+                    <RefreshCcw className="w-5 h-5" /> もう一度試す
                   </button>
                 )}
                 <button onClick={() => setStep('align')} className="w-full py-5 bg-slate-100 text-slate-600 rounded-2xl font-black">
