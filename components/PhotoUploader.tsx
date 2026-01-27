@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { Upload } from 'lucide-react';
 
@@ -8,10 +9,12 @@ interface PhotoUploaderProps {
   isProcessing?: boolean;
 }
 
-export const PhotoUploader: React.FC<PhotoUploaderProps> = ({ label, onUpload, imageUrl, isProcessing }) => {
+export const PhotoUploader: React.FC<PhotoUploaderProps> = ({ label, onUpload, imageUrl }) => {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) onUpload(file);
+    if (file) {
+      onUpload(file);
+    }
   };
 
   return (
@@ -25,11 +28,18 @@ export const PhotoUploader: React.FC<PhotoUploaderProps> = ({ label, onUpload, i
           <img src={imageUrl} alt={label} className="w-full h-full object-cover" />
         ) : (
           <div className="flex flex-col items-center p-8 text-center space-y-4">
-            <Upload className="w-10 h-10 text-slate-300 group-hover:text-blue-600 transition-colors" />
-            <p className="font-black text-slate-700 text-sm uppercase tracking-widest">画像をアップロード</p>
+            <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center group-hover:bg-blue-100 transition-colors">
+              <Upload className="w-8 h-8 text-slate-300 group-hover:text-blue-600 transition-colors" />
+            </div>
+            <p className="font-black text-slate-700 text-sm uppercase tracking-widest">画像を選択</p>
           </div>
         )}
-        <input type="file" accept="image/*" onChange={handleFileChange} className="absolute inset-0 opacity-0 cursor-pointer z-10" />
+        <input 
+          type="file" 
+          accept="image/*" 
+          onChange={handleFileChange} 
+          className="absolute inset-0 opacity-0 cursor-pointer z-10" 
+        />
       </div>
     </div>
   );
