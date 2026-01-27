@@ -1,15 +1,16 @@
-import React, { useState, useEffect } from 'react';
+
+import React, { useState } from 'react';
 import { PhotoUploader } from './components/PhotoUploader';
 import { ImageAdjustment } from './components/ImageAdjustment';
 import { AnalysisView } from './components/AnalysisView';
 import { ViewType, PhotoData, AnalysisResults } from './types';
 import { analyzePosture, fileToBase64, resizeImage } from './services/gemini';
-import { ChevronLeft, Sparkles, Activity, User, ArrowRight, AlertCircle, RefreshCcw, Key } from 'lucide-react';
+import { ChevronLeft, Sparkles, Activity, User, ArrowRight, AlertCircle, RefreshCcw } from 'lucide-react';
 
 const App: React.FC = () => {
   const [step, setStep] = useState<'type-select' | 'upload' | 'align' | 'analyze'>('type-select');
   const [selectedView, setSelectedView] = useState<ViewType>('side');
-  const [error, setError] = useState<{title: string, message: string, detail?: string, type?: 'key' | 'quota' | 'network'} | null>(null);
+  const [error, setError] = useState<{title: string, message: string} | null>(null);
   
   const [photos, setPhotos] = useState<Record<string, PhotoData>>({
     'v1-before': { id: 'v1-before', url: '', scale: 1, offset: { x: 0, y: 0 }, isFlipped: false },
@@ -21,39 +22,6 @@ const App: React.FC = () => {
 
   const viewLabels: Record<ViewType, string> = {
     front: '前面', back: '後面', side: '側面', extension: '伸展', flexion: '屈曲'
-  };
-
-  useEffect(() => {
-    const checkKey = async () => {
-      const aistudio = (window as any).aistudio;
-      if (aistudio) {
-        try {
-          const hasKey = await aistudio.hasSelectedApiKey();
-          if (!hasKey) console.log("API Key selection recommended");
-        } catch (e) {
-          console.error("AI Studio check error", e);
-        }
-      }
-    };
-    checkKey();
-  }, []);
-
-  const handleOpenKeySelector = async () => {
-    const aistudio = (window as any).aistudio;
-    if (aistudio && typeof aistudio.openSelectKey === 'function') {
-      try {
-        await aistudio.openSelectKey();
-        setError(null);
-      } catch (e) {
-        console.error("Key selection failed", e);
-      }
-    } else {
-      setError({
-        title: 'APIキー未設定',
-        message: '環境変数 API_KEY を設定するか、AI Studioでキーを選択してください。',
-        type: 'key'
-      });
-    }
   };
 
   const handleUpload = async (key: string, file: File) => {
@@ -80,17 +48,9 @@ const App: React.FC = () => {
       setIsAnalyzing(false);
     } catch (e: any) {
       console.error("Analysis error:", e);
-      const msg = e.message || '';
-      if (msg.includes('Requested entity was not found') || msg.includes('404')) {
-        setIsAnalyzing(false);
-        handleOpenKeySelector();
-        return;
-      }
       setError({
         title: '解析エラー',
-        message: 'AIとの通信に失敗しました。時間をおいて再試行してください。',
-        detail: msg,
-        type: 'network'
+        message: 'AIとの通信に失敗しました。APIキーが正しく設定されているか確認してください。'
       });
       setIsAnalyzing(false);
     }
@@ -98,16 +58,13 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-[#f8fafc] flex flex-col p-4 md:p-8">
-      <header className="max-w-6xl mx-auto w-full flex justify-between items-center mb-8">
+      <header className="max-w-6xl mx-auto w-full mb-8">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 bg-blue-600 rounded-2xl flex items-center justify-center text-white shadow-lg">
             <Activity className="w-5 h-5" />
           </div>
           <h1 className="font-black text-slate-900 tracking-tight text-xl italic uppercase">PostureRefine Pro</h1>
         </div>
-        <button onClick={handleOpenKeySelector} className="p-3 text-slate-400 hover:text-blue-600 transition-colors">
-          <Key className="w-5 h-5" />
-        </button>
       </header>
 
       <main className="flex-grow flex flex-col max-w-6xl mx-auto w-full">
