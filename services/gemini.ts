@@ -37,8 +37,11 @@ export const fileToBase64 = (file: File): Promise<string> => {
 export const analyzePosture = async (
   viewA: { type: ViewType; before: string; after: string }
 ): Promise<AnalysisResults> => {
+  // 環境変数からAPIキーを取得
   const apiKey = process.env.API_KEY;
+  
   if (!apiKey || apiKey === 'undefined' || apiKey === '') {
+    console.error("Critical: API_KEY is not defined in environment variables.");
     throw new Error('API_KEY_NOT_SET');
   }
 
@@ -90,7 +93,7 @@ export const analyzePosture = async (
       model: 'gemini-3-flash-preview',
       contents: {
         parts: [
-          { text: `分析視点: ${viewA.type}。1枚目がBefore、2枚目がAfterです。精密に比較してください。` },
+          { text: `分析視点: ${viewA.type}。1枚目がBefore（改善前）、2枚目がAfter（改善後）です。精密に比較分析してください。` },
           { inlineData: { data: viewA.before.split(',')[1], mimeType: 'image/jpeg' } },
           { inlineData: { data: viewA.after.split(',')[1], mimeType: 'image/jpeg' } }
         ]
@@ -133,11 +136,12 @@ export const analyzePosture = async (
     const text = response.text;
     if (!text) throw new Error('EMPTY_RESPONSE');
     
-    // JSONのパース
+    // 不要なマークダウン記法を削除して純粋なJSONとしてパース
     const cleanJson = text.trim().replace(/^```json\n?/, '').replace(/\n?```$/, '');
     return JSON.parse(cleanJson);
   } catch (error: any) {
-    console.error("Gemini API Error details:", error);
+    console.error("Gemini API Full Error:", error);
+    // 401エラーや403エラーなどを上位に伝える
     throw error;
   }
 };
