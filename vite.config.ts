@@ -7,7 +7,6 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: [react()],
     define: {
-      // process.env を定義してブラウザ側の実行エラーを防止
       'process.env.API_KEY': JSON.stringify(env.API_KEY || '')
     },
     server: {
