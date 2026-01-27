@@ -1,4 +1,3 @@
-
 export type ViewType = 'front' | 'back' | 'side' | 'extension' | 'flexion';
 
 export interface Point2D {
