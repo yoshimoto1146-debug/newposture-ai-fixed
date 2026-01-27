@@ -1,4 +1,5 @@
 
+
 import React, { useState } from 'react';
 import { PhotoUploader } from './components/PhotoUploader';
 import { ImageAdjustment } from './components/ImageAdjustment';
@@ -10,7 +11,7 @@ import { ChevronLeft, Sparkles, Activity, User, ArrowRight, AlertCircle, Refresh
 const App: React.FC = () => {
   const [step, setStep] = useState<'type-select' | 'upload' | 'align' | 'analyze'>('type-select');
   const [selectedView, setSelectedView] = useState<ViewType>('back');
-  const [error, setError] = useState<{title: string, message: string, detail?: string, canRetry?: boolean, showKeyBtn?: boolean} | null>(null);
+  const [error, setError] = useState<{title: string, message: string, detail?: string, type?: 'key' | 'quota' | 'network'} | null>(null);
   
   const [photos, setPhotos] = useState<Record<string, PhotoData>>({
     'v1-before': { id: 'v1-before', url: '', scale: 1, offset: { x: 0, y: 0 }, isFlipped: false },
@@ -24,26 +25,33 @@ const App: React.FC = () => {
     front: '前面', back: '後面', side: '側面', extension: '伸展', flexion: '屈曲'
   };
 
-  const handleTypeSelect = (type: ViewType) => {
-    setSelectedView(type);
-  };
-
-  // Fix: Added missing function to verify both images are uploaded before alignment
-  const canProceedToAlign = () => {
-    return !!photos['v1-before'].url && !!photos['v1-after'].url;
+  const handleOpenKeySelector = async () => {
+    // Use properly typed window.aistudio from types.ts
+    const aiStudio = window.aistudio;
+    if (aiStudio && typeof aiStudio.openSelectKey === 'function') {
+      try {
+        await aiStudio.openSelectKey();
+        setError(null);
+      } catch (e) {
+        console.error("Key selection failed", e);
+      }
+    } else {
+      alert("APIキー設定機能は、特定のブラウザ環境（AI Studio）でのみ利用可能です。それ以外の場合は .env ファイルに設定してください。");
+    }
   };
 
   const handleUpload = async (key: string, file: File) => {
-    const base64 = await fileToBase64(file);
-    const resized = await resizeImage(base64);
-    setPhotos(prev => ({ ...prev, [key]: { ...prev[key], url: resized } }));
+    try {
+      const base64 = await fileToBase64(file);
+      const resized = await resizeImage(base64);
+      setPhotos(prev => ({ ...prev, [key]: { ...prev[key], url: resized } }));
+    } catch (e) {
+      console.error("Upload error", e);
+    }
   };
 
-  const handleOpenKeySelector = async () => {
-    if (window.aistudio && typeof window.aistudio.openSelectKey === 'function') {
-      await window.aistudio.openSelectKey();
-      setError(null);
-    }
+  const canProceedToAlign = () => {
+    return !!photos['v1-before'].url && !!photos['v1-after'].url;
   };
 
   const startAnalysis = async (retryCount = 0) => {
@@ -55,41 +63,44 @@ const App: React.FC = () => {
       const v1 = { type: selectedView, before: photos['v1-before'].url, after: photos['v1-after'].url };
       const res = await analyzePosture(v1);
       setResults(res);
+      setIsAnalyzing(false);
     } catch (e: any) {
-      console.error("Analysis Error:", e);
+      console.error("Analysis Error Details:", e);
       const msg = e.message || '';
-      const lowerMsg = msg.toLowerCase();
-      
-      // 通信エラー（500/RPC/XHR）の場合は最大2回までリトライ
-      const isRpcError = lowerMsg.includes('rpc') || lowerMsg.includes('xhr') || lowerMsg.includes('500') || lowerMsg.includes('failed to fetch');
-      
-      if (isRpcError && retryCount < 2) {
-        setTimeout(() => startAnalysis(retryCount + 1), 2000);
+
+      // Guideline check: if entity not found, prompt for key again
+      if (msg.includes('Requested entity was not found.')) {
+        handleOpenKeySelector();
+        setIsAnalyzing(false);
         return;
       }
 
-      if (msg.includes('API_KEY_MISSING')) {
+      if (msg === 'MISSING_API_KEY' || msg === 'INVALID_API_KEY' || msg === 'MODEL_NOT_FOUND') {
         setError({
-          title: 'APIキーが未設定です',
-          message: '解析にはAPIキーの選択が必要です。右上の設定（または以下のボタン）からキーを選んでください。',
-          showKeyBtn: true
+          title: 'APIキーの設定が必要です',
+          message: '解析を実行するには、有効なGemini APIキーを選択してください。',
+          type: 'key'
         });
-      } else if (lowerMsg.includes('429') || lowerMsg.includes('quota')) {
+      } else if (msg === 'QUOTA_EXCEEDED') {
         setError({
           title: '利用制限に達しました',
-          message: '無料枠の上限に達したか、短時間にリクエストが集中しました。少し時間を置いてお試しください。',
+          message: '無料枠の上限に達したか、短時間にリクエストが集中しました。しばらく待ってから再度お試しください。',
+          type: 'quota'
         });
       } else {
+        if (retryCount < 2) {
+          setTimeout(() => startAnalysis(retryCount + 1), 2000);
+          return;
+        }
         setError({
-          title: '解析エラーが発生しました',
-          message: '通信環境が不安定か、画像データが大きすぎる可能性があります。',
-          detail: msg.substring(0, 100),
-          canRetry: true,
-          showKeyBtn: true
+          title: '通信エラーが発生しました',
+          message: 'インターネット接続を確認するか、しばらく待ってから「再試行」を押してください。',
+          detail: msg,
+          type: 'network'
         });
       }
+      setIsAnalyzing(false);
     }
-    setIsAnalyzing(false);
   };
 
   return (
@@ -101,7 +112,11 @@ const App: React.FC = () => {
           </div>
           <h1 className="font-black text-slate-900 tracking-tight text-xl italic uppercase">PostureRefine Pro</h1>
         </div>
-        <button onClick={handleOpenKeySelector} className="p-3 text-slate-400 hover:text-blue-600 transition-colors">
+        <button 
+          onClick={handleOpenKeySelector}
+          className="p-3 text-slate-400 hover:text-blue-600 transition-colors"
+          title="APIキー設定"
+        >
           <Key className="w-5 h-5" />
         </button>
       </header>
@@ -111,11 +126,15 @@ const App: React.FC = () => {
           <div className="my-auto space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-700">
             <div className="text-center space-y-3">
               <h2 className="text-4xl font-black text-slate-900">分析する視点を選択</h2>
-              <p className="text-slate-400 font-bold">分析したいポーズを1つ選んでください</p>
+              <p className="text-slate-400 font-bold">比較したいポーズを1つ選んでください</p>
             </div>
             <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
               {(Object.keys(viewLabels) as ViewType[]).map(type => (
-                <button key={type} onClick={() => handleTypeSelect(type)} className={`p-8 rounded-[2.5rem] border-2 transition-all flex flex-col items-center gap-4 ${selectedView === type ? 'border-blue-600 bg-blue-50 text-blue-600 ring-4 ring-blue-50' : 'border-slate-100 bg-white text-slate-400'}`}>
+                <button 
+                  key={type} 
+                  onClick={() => setSelectedView(type)} 
+                  className={`p-8 rounded-[2.5rem] border-2 transition-all flex flex-col items-center gap-4 ${selectedView === type ? 'border-blue-600 bg-blue-50 text-blue-600 ring-4 ring-blue-50' : 'border-slate-100 bg-white text-slate-400'}`}
+                >
                   <User className="w-8 h-8" />
                   <span className="font-black text-sm uppercase">{viewLabels[type]}</span>
                 </button>
@@ -137,7 +156,11 @@ const App: React.FC = () => {
                 <PhotoUploader label="After" imageUrl={photos[`v1-after`].url} onUpload={(f) => handleUpload(`v1-after`, f)} />
               </div>
             </div>
-            <button disabled={!canProceedToAlign()} onClick={() => setStep('align')} className="mx-auto block px-16 py-6 bg-slate-900 text-white rounded-[2rem] font-black text-xl shadow-2xl disabled:opacity-10 active:scale-95 transition-transform">
+            <button 
+              disabled={!canProceedToAlign()} 
+              onClick={() => setStep('align')} 
+              className="mx-auto block px-16 py-6 bg-slate-900 text-white rounded-[2rem] font-black text-xl shadow-2xl disabled:opacity-30 active:scale-95 transition-transform"
+            >
               位置合わせの調整
             </button>
           </div>
@@ -171,29 +194,36 @@ const App: React.FC = () => {
             <div className="my-auto flex flex-col items-center justify-center space-y-8">
               <div className="w-24 h-24 border-8 border-blue-50 border-t-blue-600 rounded-full animate-spin"></div>
               <h2 className="text-2xl font-black text-slate-900">AI 姿勢診断中...</h2>
-              <p className="text-slate-400 font-bold animate-pulse text-center">通信量削減のため画像を最適化して送信しています</p>
+              <p className="text-slate-400 font-bold animate-pulse">数秒〜数十秒かかる場合があります</p>
             </div>
           ) : error ? (
-            <div className="my-auto max-w-lg mx-auto w-full bg-white p-12 rounded-[3rem] shadow-2xl border border-red-50 text-center space-y-8">
+            <div className="my-auto max-w-lg mx-auto w-full bg-white p-12 rounded-[3rem] shadow-2xl border border-red-50 text-center space-y-8 animate-in zoom-in duration-300">
               <div className="w-20 h-20 bg-red-50 text-red-500 rounded-[2rem] flex items-center justify-center mx-auto">
                 <AlertCircle className="w-10 h-10" />
               </div>
               <div className="space-y-3">
                 <h2 className="text-2xl font-black text-slate-900">{error.title}</h2>
                 <p className="text-slate-500 font-bold leading-relaxed">{error.message}</p>
-                {error.detail && <p className="text-[10px] text-slate-300 font-mono mt-2">{error.detail}</p>}
+                {error.detail && <p className="text-[10px] text-slate-300 font-mono mt-2 overflow-hidden text-ellipsis whitespace-nowrap">{error.detail}</p>}
               </div>
+              
               <div className="flex flex-col gap-3">
-                {error.showKeyBtn && (
-                  <button onClick={handleOpenKeySelector} className="w-full py-5 bg-blue-600 text-white rounded-2xl font-black flex items-center justify-center gap-2 shadow-lg active:scale-95 transition-transform">
-                    <Key className="w-5 h-5" /> APIキーを再選択する
+                {(error.type === 'key' || error.type === 'network') && (
+                  <button 
+                    onClick={handleOpenKeySelector} 
+                    className="w-full py-5 bg-blue-600 text-white rounded-2xl font-black flex items-center justify-center gap-2 shadow-lg active:scale-95 transition-transform"
+                  >
+                    <Key className="w-5 h-5" /> APIキーを設定する
                   </button>
                 )}
-                {error.canRetry && (
-                  <button onClick={() => startAnalysis(0)} className="w-full py-5 bg-slate-900 text-white rounded-2xl font-black flex items-center justify-center gap-2 shadow-lg active:scale-95 transition-transform">
-                    <RefreshCcw className="w-5 h-5" /> もう一度試す
-                  </button>
-                )}
+                
+                <button 
+                  onClick={() => startAnalysis(0)} 
+                  className="w-full py-5 bg-slate-900 text-white rounded-2xl font-black flex items-center justify-center gap-2 shadow-lg active:scale-95 transition-transform"
+                >
+                  <RefreshCcw className="w-5 h-5" /> 再試行する
+                </button>
+                
                 <button onClick={() => setStep('align')} className="w-full py-5 bg-slate-100 text-slate-600 rounded-2xl font-black">
                   戻って調整し直す
                 </button>
