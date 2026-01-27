@@ -51,10 +51,7 @@ export interface PhotoData {
   isFlipped: boolean;
 }
 
-/**
- * Fix: Defines the AIStudio interface and uses it for window.aistudio to resolve
- * "Subsequent property declarations must have the same type" conflict.
- */
+// Renamed from AIStudioBridge to AIStudio to match existing global type expectations for the aistudio property on Window
 export interface AIStudio {
   hasSelectedApiKey: () => Promise<boolean>;
   openSelectKey: () => Promise<void>;
@@ -66,4 +63,4 @@ declare global {
   }
 }
 
-export {}; // モジュールとして認識させるための空エクスポート
+export {};
