@@ -1,5 +1,4 @@
 
-
 export type ViewType = 'front' | 'back' | 'side' | 'extension' | 'flexion';
 
 export interface Point2D {
@@ -52,18 +51,14 @@ export interface PhotoData {
   isFlipped: boolean;
 }
 
-/**
- * Interface for the AI Studio key selection utility to match global ambient definitions.
- */
-export interface AIStudio {
-  hasSelectedApiKey: () => Promise<boolean>;
-  openSelectKey: () => Promise<void>;
-}
-
-// ブラウザのwindowオブジェクトにaistudioを追加するための定義
+// Fix: Directly declare the structure in global Window to avoid "Subsequent property declarations" conflict
 declare global {
   interface Window {
-    // Fixed: Aligned property type with ambient AIStudio definition to fix mismatch error
-    aistudio?: AIStudio;
+    aistudio?: {
+      hasSelectedApiKey: () => Promise<boolean>;
+      openSelectKey: () => Promise<void>;
+    };
   }
 }
+
+export {}; // モジュールとして認識させるための空エクスポート
