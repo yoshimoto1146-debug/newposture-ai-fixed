@@ -34,34 +34,38 @@ export const fileToBase64 = (file: File): Promise<string> => {
   });
 };
 
+// リトライ用のユーティリティ関数
+async function withRetry<T>(fn: () => Promise<T>, retries = 3, delay = 2000): Promise<T> {
+  try {
+    return await fn();
+  } catch (error: any) {
+    if (retries > 0 && (error.status === 503 || error.message?.includes('503') || error.message?.includes('overloaded'))) {
+      console.warn(`Model overloaded. Retrying in ${delay}ms... (${retries} attempts left)`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+      return withRetry(fn, retries - 1, delay * 1.5);
+    }
+    throw error;
+  }
+}
+
 export const analyzePosture = async (
   viewA: { type: ViewType; before: string; after: string }
 ): Promise<AnalysisResults> => {
-  // 環境変数から取得（Viteのdefineによって置換されます）
-  const apiKey = process.env.API_KEY;
-  
-  if (!apiKey || apiKey === 'undefined' || apiKey === '') {
-    console.error("Critical: API_KEY is missing. Check your Environment Variables.");
+  // Always use process.env.API_KEY directly as per guidelines.
+  if (!process.env.API_KEY || process.env.API_KEY === 'undefined' || process.env.API_KEY === '') {
     throw new Error('API_KEY_NOT_SET');
   }
 
-  // キーの形式チェック（簡易）
-  if (!apiKey.startsWith("AIza")) {
-    console.warn("Warning: API_KEY does not start with 'AIza'. It might be invalid.");
-  }
-
-  const ai = new GoogleGenAI({ apiKey });
+  // Use the initialization pattern recommended in the guidelines.
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   
   const systemInstruction = `あなたは世界最高峰の理学療法士です。2枚の写真を比較し、姿勢改善を分析してください。
 座標は画像全体を1000x1000とした相対値で出力してください。
-必ずJSON形式で正確に回答してください。`;
+必ずJSON形式で正確に回答してください。言語は日本語でお願いします。`;
 
   const pointSchema = {
     type: Type.OBJECT,
-    properties: { 
-      x: { type: Type.NUMBER }, 
-      y: { type: Type.NUMBER } 
-    },
+    properties: { x: { type: Type.NUMBER }, y: { type: Type.NUMBER } },
     required: ['x', 'y']
   };
 
@@ -87,12 +91,38 @@ export const analyzePosture = async (
     required: ['label', 'beforeScore', 'afterScore', 'description', 'status']
   };
 
-  try {
+  const responseSchema = {
+    type: Type.OBJECT,
+    properties: {
+      viewA: { 
+        type: Type.OBJECT, 
+        properties: { beforeLandmarks: landmarkSchema, afterLandmarks: landmarkSchema }, 
+        required: ['beforeLandmarks', 'afterLandmarks'] 
+      },
+      overallBeforeScore: { type: Type.NUMBER },
+      overallAfterScore: { type: Type.NUMBER },
+      detailedScores: {
+        type: Type.OBJECT,
+        properties: {
+          straightNeck: scoreItemSchema,
+          rolledShoulder: scoreItemSchema,
+          kyphosis: scoreItemSchema,
+          swayback: scoreItemSchema,
+          oLegs: scoreItemSchema
+        },
+        required: ['straightNeck', 'rolledShoulder', 'kyphosis', 'swayback', 'oLegs']
+      },
+      summary: { type: Type.STRING }
+    },
+    required: ['viewA', 'overallBeforeScore', 'overallAfterScore', 'detailedScores', 'summary']
+  };
+
+  return withRetry(async () => {
     const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
+      model: 'gemini-3-pro-preview',
       contents: {
         parts: [
-          { text: `分析視点: ${viewA.type}。1枚目がBefore、2枚目がAfterです。` },
+          { text: `分析視点: ${viewA.type}。1枚目がBefore（改善前）、2枚目がAfter（改善後）です。詳細に分析してJSONで出力してください。` },
           { inlineData: { data: viewA.before.split(',')[1], mimeType: 'image/jpeg' } },
           { inlineData: { data: viewA.after.split(',')[1], mimeType: 'image/jpeg' } }
         ]
@@ -100,48 +130,13 @@ export const analyzePosture = async (
       config: {
         systemInstruction,
         responseMimeType: 'application/json',
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            viewA: { 
-              type: Type.OBJECT, 
-              properties: { 
-                beforeLandmarks: landmarkSchema, 
-                afterLandmarks: landmarkSchema 
-              }, 
-              required: ['beforeLandmarks', 'afterLandmarks'] 
-            },
-            overallBeforeScore: { type: Type.NUMBER },
-            overallAfterScore: { type: Type.NUMBER },
-            detailedScores: {
-              type: Type.OBJECT,
-              properties: {
-                straightNeck: scoreItemSchema,
-                rolledShoulder: scoreItemSchema,
-                kyphosis: scoreItemSchema,
-                swayback: scoreItemSchema,
-                oLegs: scoreItemSchema
-              },
-              required: ['straightNeck', 'rolledShoulder', 'kyphosis', 'swayback', 'oLegs']
-            },
-            summary: { type: Type.STRING }
-          },
-          required: ['viewA', 'overallBeforeScore', 'overallAfterScore', 'detailedScores', 'summary']
-        },
-        thinkingConfig: { thinkingBudget: 0 }
+        responseSchema: responseSchema as any
       }
     });
 
+    // Directly access the text property as per guidelines.
     const text = response.text;
     if (!text) throw new Error('EMPTY_RESPONSE');
-    
     return JSON.parse(text);
-  } catch (error: any) {
-    console.error("Gemini API Error details:", error);
-    // APIが401(Unauthorized)を返した場合
-    if (error.message?.includes('401') || error.status === 401 || error.status === 403) {
-      throw new Error('INVALID_API_KEY');
-    }
-    throw error;
-  }
+  });
 };
