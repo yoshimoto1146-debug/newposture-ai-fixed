@@ -23,6 +23,8 @@ const App: React.FC = () => {
     front: '前面', back: '後面', side: '側面', extension: '伸展', flexion: '屈曲'
   };
 
+  const storeName = process.env.STORE_NAME;
+
   const handleUpload = async (key: string, file: File) => {
     try {
       const base64 = await fileToBase64(file);
@@ -46,24 +48,29 @@ const App: React.FC = () => {
       setResults(res);
       setIsAnalyzing(false);
     } catch (e: any) {
-      console.error("Analysis caught error:", e);
+      console.error("Analysis process error:", e);
       
+      let errorTitle = '解析エラー';
+      let errorMessage = '画像の解析中に問題が発生しました。';
+
       if (e.message === 'API_KEY_NOT_SET') {
-        setError({
-          title: 'APIキーが見つかりません',
-          message: '公開設定の「Environment Variables」に API_KEY が正しく登録されているか確認してください。'
-        });
-      } else if (e.message === 'INVALID_API_KEY') {
-        setError({
-          title: '無効なAPIキー',
-          message: '設定されているAPIキーが正しくないか、有効期限が切れています。Google AI Studioで新しいキーを確認してください。'
-        });
-      } else {
-        setError({
-          title: '解析エラー',
-          message: 'AIとの通信中に不明なエラーが発生しました。ブラウザのコンソールで詳細を確認できます。'
-        });
+        errorTitle = 'APIキー未設定';
+        errorMessage = 'Vercelの環境変数 API_KEY が設定されていません。再設定と再デプロイが必要です。';
+      } else if (e.message?.includes('API key not valid')) {
+        errorTitle = '無効なAPIキー';
+        errorMessage = '設定されているAPIキーが正しくありません。Google AI Studioで新しいキーを取得してください。';
+      } else if (e.status === 429 || e.message?.includes('429')) {
+        errorTitle = '回数制限（リミット）';
+        errorMessage = '無料枠の利用制限を超えました。少し時間を置いてからお試しください。';
+      } else if (e.status === 503 || e.message?.includes('503') || e.message?.includes('overloaded')) {
+        errorTitle = 'AIサーバー混雑';
+        errorMessage = 'GoogleのAIサーバーが一時的に過負荷です。数分後に再度お試しください。';
+      } else if (e.message === 'INVALID_JSON_RESPONSE') {
+        errorTitle = 'データ処理エラー';
+        errorMessage = 'AIからの回答が読み取れませんでした。もう一度送信してください。';
       }
+
+      setError({ title: errorTitle, message: errorMessage });
       setIsAnalyzing(false);
     }
   };
@@ -71,11 +78,18 @@ const App: React.FC = () => {
   return (
     <div className="min-h-screen bg-[#f8fafc] flex flex-col p-4 md:p-8">
       <header className="max-w-6xl mx-auto w-full mb-8">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-blue-600 rounded-2xl flex items-center justify-center text-white shadow-lg">
-            <Activity className="w-5 h-5" />
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-blue-600 rounded-2xl flex items-center justify-center text-white shadow-lg">
+              <Activity className="w-5 h-5" />
+            </div>
+            <div className="flex flex-col">
+              <h1 className="font-black text-slate-900 tracking-tight text-xl italic uppercase leading-none">PostureRefine Pro</h1>
+              {storeName && (
+                <span className="text-[10px] font-bold text-blue-600 uppercase tracking-[0.2em] mt-1.5 border-t border-blue-100 pt-1.5">{storeName}</span>
+              )}
+            </div>
           </div>
-          <h1 className="font-black text-slate-900 tracking-tight text-xl italic uppercase">PostureRefine Pro</h1>
         </div>
       </header>
 
@@ -138,11 +152,10 @@ const App: React.FC = () => {
             <div className="my-auto max-w-lg mx-auto w-full bg-white p-12 rounded-[3rem] shadow-2xl text-center space-y-8">
               <AlertCircle className="w-20 h-20 text-red-500 mx-auto" />
               <h2 className="text-2xl font-black">{error.title}</h2>
-              <p className="text-slate-500 font-bold">{error.message}</p>
+              <p className="text-slate-500 font-bold leading-relaxed">{error.message}</p>
               <button onClick={() => startAnalysis()} className="w-full py-5 bg-slate-900 text-white rounded-2xl font-black flex items-center justify-center gap-2 transition-colors hover:bg-slate-800">
                 <RefreshCcw className="w-5 h-5" /> 再試行
               </button>
-              <p className="text-[10px] text-slate-300 font-bold uppercase tracking-widest italic">ブラウザのコンソールログに詳細が表示されます</p>
             </div>
           ) : results && <AnalysisView results={results} photos={photos} onReset={() => setStep('type-select')} />
         )}
