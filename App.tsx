@@ -9,7 +9,7 @@ import { ChevronLeft, Sparkles, Activity, User, ArrowRight, AlertCircle, Refresh
 const App: React.FC = () => {
   const [step, setStep] = useState<'type-select' | 'upload' | 'align' | 'analyze'>('type-select');
   const [selectedView, setSelectedView] = useState<ViewType>('side');
-  const [error, setError] = useState<{title: string, message: string} | null>(null);
+  const [error, setError] = useState<{title: string, message: string, detail?: string} | null>(null);
   
   const [photos, setPhotos] = useState<Record<string, PhotoData>>({
     'v1-before': { id: 'v1-before', url: '', scale: 1, offset: { x: 0, y: 0 }, isFlipped: false },
@@ -48,29 +48,27 @@ const App: React.FC = () => {
       setResults(res);
       setIsAnalyzing(false);
     } catch (e: any) {
-      console.error("Analysis process error:", e);
+      console.error("Detailed error info:", e);
       
       let errorTitle = '解析エラー';
-      let errorMessage = '画像の解析中に問題が発生しました。';
+      let errorMessage = 'AIとの通信中にエラーが発生しました。';
+      let errorDetail = e.message || String(e);
 
       if (e.message === 'API_KEY_NOT_SET') {
         errorTitle = 'APIキー未設定';
-        errorMessage = 'Vercelの環境変数 API_KEY が設定されていません。再設定と再デプロイが必要です。';
-      } else if (e.message?.includes('API key not valid')) {
+        errorMessage = 'Vercelの環境変数 API_KEY が空です。';
+      } else if (e.status === 403 || e.message?.includes('API key not valid')) {
         errorTitle = '無効なAPIキー';
-        errorMessage = '設定されているAPIキーが正しくありません。Google AI Studioで新しいキーを取得してください。';
-      } else if (e.status === 429 || e.message?.includes('429')) {
-        errorTitle = '回数制限（リミット）';
-        errorMessage = '無料枠の利用制限を超えました。少し時間を置いてからお試しください。';
-      } else if (e.status === 503 || e.message?.includes('503') || e.message?.includes('overloaded')) {
-        errorTitle = 'AIサーバー混雑';
-        errorMessage = 'GoogleのAIサーバーが一時的に過負荷です。数分後に再度お試しください。';
-      } else if (e.message === 'INVALID_JSON_RESPONSE') {
-        errorTitle = 'データ処理エラー';
-        errorMessage = 'AIからの回答が読み取れませんでした。もう一度送信してください。';
+        errorMessage = 'APIキーが正しくないか、有効化されていません。';
+      } else if (e.status === 429) {
+        errorTitle = 'リミット到達';
+        errorMessage = '利用制限（クォータ）を超えました。';
+      } else if (e.status === 404) {
+        errorTitle = 'モデル未対応';
+        errorMessage = '指定されたモデルがこのAPIキーでは使用できません。';
       }
 
-      setError({ title: errorTitle, message: errorMessage });
+      setError({ title: errorTitle, message: errorMessage, detail: errorDetail });
       setIsAnalyzing(false);
     }
   };
@@ -146,13 +144,18 @@ const App: React.FC = () => {
             <div className="my-auto flex flex-col items-center justify-center space-y-8 text-center">
               <div className="w-24 h-24 border-8 border-blue-50 border-t-blue-600 rounded-full animate-spin"></div>
               <h2 className="text-2xl font-black text-slate-900">AI 診断中...</h2>
-              <p className="text-slate-400 font-bold">姿勢のバランスを精密分析しています</p>
+              <p className="text-slate-400 font-bold">高画質で姿勢を精密分析しています</p>
             </div>
           ) : error ? (
             <div className="my-auto max-w-lg mx-auto w-full bg-white p-12 rounded-[3rem] shadow-2xl text-center space-y-8">
               <AlertCircle className="w-20 h-20 text-red-500 mx-auto" />
               <h2 className="text-2xl font-black">{error.title}</h2>
               <p className="text-slate-500 font-bold leading-relaxed">{error.message}</p>
+              {error.detail && (
+                <div className="bg-slate-50 p-4 rounded-xl text-[10px] font-mono text-slate-400 break-all text-left">
+                  Error Detail: {error.detail}
+                </div>
+              )}
               <button onClick={() => startAnalysis()} className="w-full py-5 bg-slate-900 text-white rounded-2xl font-black flex items-center justify-center gap-2 transition-colors hover:bg-slate-800">
                 <RefreshCcw className="w-5 h-5" /> 再試行
               </button>
