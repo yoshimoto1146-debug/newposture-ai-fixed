@@ -1,8 +1,8 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { ViewType, AnalysisResults } from "../types";
 
-// 画像のクオリティをさらに向上（1024px -> 1280px, quality 0.85 -> 0.9）
-export const resizeImage = (base64Str: string, maxWidth = 1280, maxHeight = 1280): Promise<string> => {
+// 画像のクオリティをさらに向上（1280px -> 1600px, quality 0.9 -> 0.95）
+export const resizeImage = (base64Str: string, maxWidth = 1600, maxHeight = 1600): Promise<string> => {
   return new Promise((resolve) => {
     const img = new Image();
     img.src = base64Str;
@@ -24,9 +24,9 @@ export const resizeImage = (base64Str: string, maxWidth = 1280, maxHeight = 1280
         ctx.imageSmoothingQuality = 'high';
         ctx.drawImage(img, 0, 0, width, height);
       }
-      resolve(canvas.toDataURL('image/jpeg', 0.9));
+      resolve(canvas.toDataURL('image/jpeg', 0.95));
     };
-    img.onerror = () => resolve(base64Str); // 失敗時は元の画像を返す
+    img.onerror = () => resolve(base64Str);
   });
 };
 
@@ -43,7 +43,9 @@ async function withRetry<T>(fn: () => Promise<T>, retries = 2, delay = 2000): Pr
     return await fn();
   } catch (error: any) {
     console.error("Gemini API Attempt failed:", error);
-    if (retries > 0) {
+    // 401, 403, 404 などの致命的なエラー以外のみリトライ
+    const status = error.status;
+    if (retries > 0 && status !== 401 && status !== 403 && status !== 404) {
       await new Promise(resolve => setTimeout(resolve, delay));
       return withRetry(fn, retries - 1, delay * 1.5);
     }
@@ -54,11 +56,9 @@ async function withRetry<T>(fn: () => Promise<T>, retries = 2, delay = 2000): Pr
 export const analyzePosture = async (
   viewA: { type: ViewType; before: string; after: string }
 ): Promise<AnalysisResults> => {
-  // 環境変数の取得方法をより堅牢に（Viteのビルド時に置換される）
   const apiKey = (process.env.API_KEY || "").trim();
   
-  if (!apiKey || apiKey === 'undefined') {
-    console.error("API Key is missing in process.env");
+  if (!apiKey || apiKey === 'undefined' || apiKey === '') {
     throw new Error('API_KEY_NOT_SET');
   }
 
@@ -123,12 +123,11 @@ export const analyzePosture = async (
   };
 
   return withRetry(async () => {
-    // モデルを安定版の gemini-2.5-flash-latest に変更
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash-latest',
+      model: 'gemini-3-flash-preview',
       contents: {
         parts: [
-          { text: `分析視点: ${viewA.type}。1枚目がBefore（改善前）、2枚目がAfter（改善後）です。詳細に分析してJSONで出力してください。` },
+          { text: `分析視点: ${viewA.type}。1枚目がBefore、2枚目がAfterです。詳細に分析してJSONで出力してください。` },
           { inlineData: { data: viewA.before.split(',')[1], mimeType: 'image/jpeg' } },
           { inlineData: { data: viewA.after.split(',')[1], mimeType: 'image/jpeg' } }
         ]
@@ -141,15 +140,12 @@ export const analyzePosture = async (
     });
 
     const text = response.text;
-    if (!text) {
-      console.error("Gemini API returned empty text");
-      throw new Error('EMPTY_RESPONSE');
-    }
+    if (!text) throw new Error('EMPTY_RESPONSE');
     
     try {
       return JSON.parse(text);
     } catch (e) {
-      console.error("JSON Parse Error. Raw text:", text);
+      console.error("JSON Parse Error:", text);
       throw new Error('INVALID_JSON_RESPONSE');
     }
   });
